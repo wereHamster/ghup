@@ -1,55 +1,49 @@
 #!/usr/bin/env ruby
 
-# Die if something goes wrong
+require 'json'
+require 'net/https'
+require 'pathname'
+
+
+
+# Extensions
+# ----------
+
+# We extend Pathname a bit to get the content type.
+class Pathname
+  def type
+    flags = RUBY_PLATFORM =~ /darwin/ ? 'Ib' : 'ib'
+    `file -#{flags} #{realpath}`.chomp.gsub(/;.*/,'')
+  end
+end
+
+
+
+# Helpers
+# -------
+
+# Die if something goes wrong.
 def die(msg); puts(msg); exit!(1); end
 
-# Login credentials
-login = `git config --get github.user`.chomp
-token = `git config --get github.passwd`.chomp
+# Do a post to the given url, with the payload and optional basic auth.
+def post(url, auth, params, headers)
+  uri = URI.parse(url)
 
-# We extend Pathname a bit to get the content type
-require 'pathname'
-class Pathname; def type; `file -Ib #{to_s}`.chomp; end; end
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
 
-# The file we want to upload
-file = Pathname.new(ARGV[0])
+  req = Net::HTTP::Post.new(uri.path, headers)
+  req.basic_auth(*auth) if auth
 
-# Repository to which to upload the file
-repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+  return http.request(req, params)
+end
 
-# Establish a HTTPS connection to github
-require 'net/https'
-uri = URI.parse("https://api.github.com/repos/#{repo}/downloads")
-http = Net::HTTP.new(uri.host, uri.port)
-http.use_ssl = true
-
-# Request a signature and that stuff so that we can upload the file to S3
-req = Net::HTTP::Post.new(uri.path)
-req.basic_auth(login, token)
-
-# Check if something went wrong
-require 'json'
-res = http.request(req, {
-  'name' => file.basename.to_s, 'size' => file.size.to_s,
-  'content_type' => file.type.gsub(/;.*/, '')
-}.to_json)
-
-die("File already exists.") if res.class == Net::HTTPClientError
-die("Github doens't want us to upload the file.") unless res.class == Net::HTTPCreated
-
-# Parse the body, it's json
-info = JSON.parse(res.body)
-
-# Open a connection to S3
-uri = URI.parse(info['s3_url'])
-http = Net::HTTP.new(uri.host, uri.port)
-http.use_ssl = true
-
-# Yep, ruby net/http doesn't support multipart. Write our own multipart generator.
 def urlencode(str)
   str.gsub(/[^a-zA-Z0-9_\.\-]/n) {|s| sprintf('%%%02x', s[0].to_i) }
 end
 
+# Yep, ruby net/http doesn't support multipart. Write our own multipart generator.
+# The order of the params is important, the file needs to go as last!
 def build_multipart_content(params)
   parts, boundary = [], "#{rand(1000000)}-we-are-all-doomed-#{rand(1000000)}"
 
@@ -76,8 +70,37 @@ def build_multipart_content(params)
   }]
 end
 
-# The order of the params is important, the file needs to go as last!
-res = http.post(uri.path, *build_multipart_content({
+
+
+# Configuration and setup
+# -----------------------
+
+# Get login credentials.
+login = `git config --get github.user`.chomp
+token = `git config --get github.passwd`.chomp
+
+# The file we want to upload, and repo where to upload it to.
+file = Pathname.new(ARGV[0])
+repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+
+
+
+# The actual, hard work
+# ---------------------
+
+# Register the download at github.
+res = post("https://api.github.com/repos/#{repo}/downloads", [ login, token ], {
+  'name' => file.basename.to_s, 'size' => file.size.to_s,
+  'content_type' => file.type.gsub(/;.*/, '')
+}.to_json, {})
+
+die("File already exists.") if res.class == Net::HTTPClientError
+die("GitHub doens't want us to upload the file.") unless res.class == Net::HTTPCreated
+
+
+# Parse the body and use the info to upload the file to S3.
+info = JSON.parse(res.body)
+res = post(info['s3_url'], nil, *build_multipart_content({
   'key' => info['path'], 'acl' => info['acl'], 'success_action_status' => 201,
   'Filename' => info['name'], 'AWSAccessKeyId' => info['accesskeyid'],
   'Policy' => info['policy'], 'signature' => info['signature'],
@@ -85,6 +108,7 @@ res = http.post(uri.path, *build_multipart_content({
 }))
 
 die("S3 is mean to us.") unless res.class == Net::HTTPCreated
+
 
 # Print the URL to the file to stdout.
 puts "#{info['s3_url']}#{info['path']}"
