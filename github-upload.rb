@@ -26,14 +26,14 @@ end
 def die(msg); puts(msg); exit!(1); end
 
 # Do a post to the given url, with the payload and optional basic auth.
-def post(url, auth, params, headers)
+def post(url, token, params, headers)
   uri = URI.parse(url)
 
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true
 
   req = Net::HTTP::Post.new(uri.path, headers)
-  req.basic_auth(*auth) if auth
+  req['Authorization'] = "token #{token}" if token
 
   return http.request(req, params)
 end
@@ -75,9 +75,8 @@ end
 # Configuration and setup
 # -----------------------
 
-# Get login credentials.
-login = `git config --get github.user`.chomp
-token = `git config --get github.passwd`.chomp
+# Get Oauth token for this script.
+token = `git config --get github.upload-script-token`.chomp
 
 # The file we want to upload, and repo where to upload it to.
 file = Pathname.new(ARGV[0])
@@ -89,7 +88,7 @@ repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+
 # ---------------------
 
 # Register the download at github.
-res = post("https://api.github.com/repos/#{repo}/downloads", [ login, token ], {
+res = post("https://api.github.com/repos/#{repo}/downloads", token, {
   'name' => file.basename.to_s, 'size' => file.size.to_s,
   'content_type' => file.type.gsub(/;.*/, '')
 }.to_json, {})
