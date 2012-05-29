@@ -1,5 +1,13 @@
 #!/usr/bin/env ruby
 
+# Die if something goes wrong.
+def die(msg); puts(msg); exit!(1); end
+
+# First thing we do is check the ruby version. This script requires 1.9, die
+# if that's not the case.
+die("This script requires ruby 1.9") unless RUBY_VERSION =~ /^1.9/
+
+
 require 'json'
 require 'net/https'
 require 'pathname'
@@ -21,9 +29,6 @@ end
 
 # Helpers
 # -------
-
-# Die if something goes wrong.
-def die(msg); puts(msg); exit!(1); end
 
 # Do a post to the given url, with the payload and optional basic auth.
 def post(url, token, params, headers)
