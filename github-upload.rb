@@ -94,7 +94,7 @@ res = post("https://api.github.com/repos/#{repo}/downloads", token, {
 }.to_json, {})
 
 die("File already exists.") if res.class == Net::HTTPClientError
-die("GitHub doens't want us to upload the file.") unless res.class == Net::HTTPCreated
+die("GitHub doesn't want us to upload the file.") unless res.class == Net::HTTPCreated
 
 
 # Parse the body and use the info to upload the file to S3.
