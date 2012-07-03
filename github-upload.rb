@@ -11,6 +11,7 @@ die("This script requires ruby 1.9") unless RUBY_VERSION =~ /^1.9/
 require 'json'
 require 'net/https'
 require 'pathname'
+require 'optparse'
 
 
 
@@ -76,7 +77,6 @@ def build_multipart_content(params)
 end
 
 
-
 # Configuration and setup
 # -----------------------
 
@@ -86,6 +86,16 @@ token = `git config --get github.upload-script-token`.chomp
 # The file we want to upload, and repo where to upload it to.
 file = Pathname.new(ARGV[0])
 repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+
+
+# Parse command line options using OptionParser
+# -----------------------
+
+OptionParser.new do |opts|
+
+	opts.banner = "Usage: github-upload.rb <file-name> [<repository>]"
+
+end.parse!
 
 
 
