@@ -137,6 +137,12 @@ OptionParser.new do |opts|
     force_upload = true
   end
   
+  opts.on("-h", "--help", 
+      "Show this message") do
+    puts op
+    exit
+  end
+  
 end.parse!
 
 
