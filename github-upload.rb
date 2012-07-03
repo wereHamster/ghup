@@ -87,6 +87,7 @@ token = `git config --get github.upload-script-token`.chomp
 file = Pathname.new(ARGV[0])
 repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
 
+file_description = ""
 
 # Parse command line options using OptionParser
 # -----------------------
@@ -94,7 +95,12 @@ repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+
 OptionParser.new do |opts|
 
 	opts.banner = "Usage: github-upload.rb <file-name> [<repository>]"
-
+	
+	opts.on("-d", "--description [DESCRIPTION]",
+		  "Add a description to the uploaded file.") do |arg_description|
+		file_description = arg_description
+	end
+	
 end.parse!
 
 
@@ -105,6 +111,7 @@ end.parse!
 # Register the download at github.
 res = post("https://api.github.com/repos/#{repo}/downloads", token, {
   'name' => file.basename.to_s, 'size' => file.size.to_s,
+  'description' => file_description,
   'content_type' => file.type.gsub(/;.*/, '')
 }.to_json, {})
 
