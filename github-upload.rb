@@ -139,7 +139,7 @@ OptionParser.new do |opts|
   
   opts.on("-h", "--help", 
       "Show this message") do
-    puts op
+    puts opts
     exit
   end
   
