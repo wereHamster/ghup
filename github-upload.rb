@@ -11,6 +11,7 @@ die("This script requires ruby 1.9") unless RUBY_VERSION =~ /^1.9/
 require 'json'
 require 'net/https'
 require 'pathname'
+require 'optparse'
 
 
 
@@ -30,6 +31,18 @@ end
 # Helpers
 # -------
 
+def get(url, token)
+  uri = URI.parse(url)
+
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+
+  req = Net::HTTP::Get.new(uri.path)
+  req['Authorization'] = "token #{token}" if token
+
+  return http.request(req)
+end
+
 # Do a post to the given url, with the payload and optional basic auth.
 def post(url, token, params, headers)
   uri = URI.parse(url)
@@ -41,6 +54,18 @@ def post(url, token, params, headers)
   req['Authorization'] = "token #{token}" if token
 
   return http.request(req, params)
+end
+
+def delete(url, token)
+  uri = URI.parse(url)
+
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = true
+
+  req = Net::HTTP::Delete.new(uri.path)
+  req['Authorization'] = "token #{token}" if token
+
+  return http.request(req)
 end
 
 def urlencode(str)
@@ -76,29 +101,82 @@ def build_multipart_content(params)
 end
 
 
-
 # Configuration and setup
 # -----------------------
 
 # Get Oauth token for this script.
 token = `git config --get github.upload-script-token`.chomp
+force_upload = false
 
 # The file we want to upload, and repo where to upload it to.
 file = Pathname.new(ARGV[0])
 repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+
+file_name = file.basename.to_s
+file_description = ""
+
+# Parse command line options using OptionParser
+# -----------------------
+
+OptionParser.new do |opts|
+
+  opts.banner = "Usage: github-upload.rb <file-name> [<repository>] [options]"
+  
+  opts.on("-d", "--description [DESCRIPTION]",
+      "Add a description to the uploaded file.") do |arg_description|
+    file_description = arg_description
+  end
+  
+  opts.on("-n", "--name [NAME]",
+      "New name of the uploaded file.") do |arg_name|
+    file_name = arg_name
+  end
+  
+  opts.on("-f", "--force",
+      "If a file with that name already exists on the server, replace it with this one.") do
+    force_upload = true
+  end
+  
+  opts.on("-h", "--help", 
+      "Show this message") do
+    puts opts
+    exit
+  end
+  
+end.parse!
 
 
 
 # The actual, hard work
 # ---------------------
 
+
+if force_upload
+
+  # Make sure the file doesn't already exist
+  res = get("https://api.github.com/repos/#{repo}/downloads", token)
+  info = JSON.parse(res.body)
+  info.each do |remote_file|
+    remote_file_name = remote_file["name"].to_s
+    if remote_file_name == file_name then
+      # Delete already existing files
+      puts "Deleting existing file '#{remote_file_name}'"
+      remote_file_id = remote_file["id"].to_s
+      res = delete("https://api.github.com/repos/#{repo}/downloads/#{remote_file_id}", token)
+    end
+  end
+
+end
+
+
 # Register the download at github.
 res = post("https://api.github.com/repos/#{repo}/downloads", token, {
-  'name' => file.basename.to_s, 'size' => file.size.to_s,
+  'name' => file_name, 'size' => file.size.to_s,
+  'description' => file_description,
   'content_type' => file.type.gsub(/;.*/, '')
 }.to_json, {})
 
-die("File already exists.") if res.class == Net::HTTPClientError
+die("File already exists named '#{file_name}'.") if res.class == Net::HTTPClientError
 die("GitHub doesn't want us to upload the file.") unless res.class == Net::HTTPCreated
 
 
