@@ -120,23 +120,23 @@ file_description = ""
 
 OptionParser.new do |opts|
 
-	opts.banner = "Usage: github-upload.rb <file-name> [<repository>] [options]"
-	
-	opts.on("-d", "--description [DESCRIPTION]",
-			"Add a description to the uploaded file.") do |arg_description|
-		file_description = arg_description
-	end
-	
-	opts.on("-n", "--name [NAME]",
-			"New name of the uploaded file.") do |arg_name|
-		file_name = arg_name
-	end
-	
-	opts.on("-f", "--force",
-			"If a file with that name already exists on the server, replace it with this one.") do
-		force_upload = true
-	end
-	
+  opts.banner = "Usage: github-upload.rb <file-name> [<repository>] [options]"
+  
+  opts.on("-d", "--description [DESCRIPTION]",
+      "Add a description to the uploaded file.") do |arg_description|
+    file_description = arg_description
+  end
+  
+  opts.on("-n", "--name [NAME]",
+      "New name of the uploaded file.") do |arg_name|
+    file_name = arg_name
+  end
+  
+  opts.on("-f", "--force",
+      "If a file with that name already exists on the server, replace it with this one.") do
+    force_upload = true
+  end
+  
 end.parse!
 
 
@@ -147,18 +147,18 @@ end.parse!
 
 if force_upload
 
-	# Make sure the file doesn't already exist
-	res = get("https://api.github.com/repos/#{repo}/downloads", token)
-	info = JSON.parse(res.body)
-	info.each do |remote_file|
-		remote_file_name = remote_file["name"].to_s
-		if remote_file_name == file_name then
-			# Delete already existing files
-			puts "Deleting existing file '#{remote_file_name}'"
-			remote_file_id = remote_file["id"].to_s
-			res = delete("https://api.github.com/repos/#{repo}/downloads/#{remote_file_id}", token)
-		end
-	end
+  # Make sure the file doesn't already exist
+  res = get("https://api.github.com/repos/#{repo}/downloads", token)
+  info = JSON.parse(res.body)
+  info.each do |remote_file|
+    remote_file_name = remote_file["name"].to_s
+    if remote_file_name == file_name then
+      # Delete already existing files
+      puts "Deleting existing file '#{remote_file_name}'"
+      remote_file_id = remote_file["id"].to_s
+      res = delete("https://api.github.com/repos/#{repo}/downloads/#{remote_file_id}", token)
+    end
+  end
 
 end
 
