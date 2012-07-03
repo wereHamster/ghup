@@ -101,22 +101,10 @@ def build_multipart_content(params)
 end
 
 
-# Configuration and setup
-# -----------------------
-
-# Get Oauth token for this script.
-token = `git config --get github.upload-script-token`.chomp
-force_upload = false
-
-# The file we want to upload, and repo where to upload it to.
-file = Pathname.new(ARGV[0])
-repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
-
-file_name = file.basename.to_s
-file_description = ""
-
 # Parse command line options using OptionParser
 # -----------------------
+
+$options = {}
 
 OptionParser.new do |opts|
 
@@ -124,17 +112,17 @@ OptionParser.new do |opts|
   
   opts.on("-d", "--description [DESCRIPTION]",
       "Add a description to the uploaded file.") do |arg_description|
-    file_description = arg_description
+    $options[:file_description] = arg_description
   end
   
   opts.on("-n", "--name [NAME]",
       "New name of the uploaded file.") do |arg_name|
-    file_name = arg_name
+    $options[:file_name] = arg_name
   end
   
   opts.on("-f", "--force",
       "If a file with that name already exists on the server, replace it with this one.") do
-    force_upload = true
+    $options[:force_upload] = true
   end
   
   opts.on("-h", "--help", 
@@ -147,11 +135,26 @@ end.parse!
 
 
 
+# Configuration and setup
+# -----------------------
+
+# Get Oauth token for this script.
+token = `git config --get github.upload-script-token`.chomp
+
+# The file we want to upload, and repo where to upload it to.
+die("Please specify a file to upload.") if ARGV.length < 1
+file = Pathname.new(ARGV[0])
+repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+
+file_name =        $options[:file_name] || file.basename.to_s
+file_description = $options[:description] || ""
+
+
 # The actual, hard work
 # ---------------------
 
 
-if force_upload
+if $options[:force_upload]
 
   # Make sure the file doesn't already exist
   res = get("https://api.github.com/repos/#{repo}/downloads", token)
