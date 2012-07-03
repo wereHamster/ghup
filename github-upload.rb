@@ -31,41 +31,31 @@ end
 # Helpers
 # -------
 
-def get(url, token)
-  uri = URI.parse(url)
-
+def get_http_request(uri, token, request, params = "")
   http = Net::HTTP.new(uri.host, uri.port)
   http.use_ssl = true
+  http.verify_mode = OpenSSL::SSL::VERIFY_NONE if $options[:skip_ssl_verification]
+  request['Authorization'] = "token #{token}" if token  
+  return http.request(request, params)
+end
 
+def get(url, token)
+  uri = URI.parse(url)
   req = Net::HTTP::Get.new(uri.path)
-  req['Authorization'] = "token #{token}" if token
-
-  return http.request(req)
+  return get_http_request(uri, token, req)
 end
 
 # Do a post to the given url, with the payload and optional basic auth.
 def post(url, token, params, headers)
   uri = URI.parse(url)
-
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
-
   req = Net::HTTP::Post.new(uri.path, headers)
-  req['Authorization'] = "token #{token}" if token
-
-  return http.request(req, params)
+  return get_http_request(uri, token, req, params)
 end
 
 def delete(url, token)
   uri = URI.parse(url)
-
-  http = Net::HTTP.new(uri.host, uri.port)
-  http.use_ssl = true
-
   req = Net::HTTP::Delete.new(uri.path)
-  req['Authorization'] = "token #{token}" if token
-
-  return http.request(req)
+  return get_http_request(uri, token, req)
 end
 
 def urlencode(str)
@@ -101,22 +91,10 @@ def build_multipart_content(params)
 end
 
 
-# Configuration and setup
-# -----------------------
-
-# Get Oauth token for this script.
-token = `git config --get github.upload-script-token`.chomp
-force_upload = false
-
-# The file we want to upload, and repo where to upload it to.
-file = Pathname.new(ARGV[0])
-repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
-
-file_name = file.basename.to_s
-file_description = ""
-
 # Parse command line options using OptionParser
 # -----------------------
+
+$options = {}
 
 OptionParser.new do |opts|
 
@@ -124,17 +102,27 @@ OptionParser.new do |opts|
   
   opts.on("-d", "--description [DESCRIPTION]",
       "Add a description to the uploaded file.") do |arg_description|
-    file_description = arg_description
+    $options[:file_description] = arg_description
   end
   
   opts.on("-n", "--name [NAME]",
       "New name of the uploaded file.") do |arg_name|
-    file_name = arg_name
+    $options[:file_name] = arg_name
   end
   
   opts.on("-f", "--force",
       "If a file with that name already exists on the server, replace it with this one.") do
-    force_upload = true
+    $options[:force_upload] = true
+  end
+  
+  opts.on("-t", "--token [TOKEN]",
+      "Manually specify a GitHub API token. Useful if you want to temporarily upload a file under a different GitHub account.") do |arg_token|
+    $options[:token] = arg_token
+  end
+  
+  opts.on("--skip-ssl-verification",
+      "Skip SSL Verification in the HTTP Request.") do
+    $options[:skip_ssl_verification] = true
   end
   
   opts.on("-h", "--help", 
@@ -147,14 +135,29 @@ end.parse!
 
 
 
+# Configuration and setup
+# -----------------------
+
+# The file we want to upload, and repo where to upload it to.
+die("Please specify a file to upload.") if ARGV.length < 1
+file = Pathname.new(ARGV[0])
+repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+
+file_name =        $options[:file_name] || file.basename.to_s
+file_description = $options[:file_description] || ""
+
+
 # The actual, hard work
 # ---------------------
 
+# Get Oauth token for this script.
+$options[:token] = `git config --get github.upload-script-token`.chomp unless $options[:token]
 
-if force_upload
+
+if $options[:force_upload]
 
   # Make sure the file doesn't already exist
-  res = get("https://api.github.com/repos/#{repo}/downloads", token)
+  res = get("https://api.github.com/repos/#{repo}/downloads", $options[:token])
   info = JSON.parse(res.body)
   info.each do |remote_file|
     remote_file_name = remote_file["name"].to_s
@@ -162,7 +165,7 @@ if force_upload
       # Delete already existing files
       puts "Deleting existing file '#{remote_file_name}'"
       remote_file_id = remote_file["id"].to_s
-      res = delete("https://api.github.com/repos/#{repo}/downloads/#{remote_file_id}", token)
+      res = delete("https://api.github.com/repos/#{repo}/downloads/#{remote_file_id}", $options[:token])
     end
   end
 
@@ -170,7 +173,7 @@ end
 
 
 # Register the download at github.
-res = post("https://api.github.com/repos/#{repo}/downloads", token, {
+res = post("https://api.github.com/repos/#{repo}/downloads", $options[:token], {
   'name' => file_name, 'size' => file.size.to_s,
   'description' => file_description,
   'content_type' => file.type.gsub(/;.*/, '')
