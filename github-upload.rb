@@ -21,8 +21,12 @@ require 'optparse'
 # We extend Pathname a bit to get the content type.
 class Pathname
   def type
-    flags = RUBY_PLATFORM =~ /darwin/ ? 'Ib' : 'ib'
-    `file -#{flags} #{realpath}`.chomp.gsub(/;.*/,'')
+    if $options[:mime_type] then
+      $options[:mime_type]
+    else
+      flags = RUBY_PLATFORM =~ /darwin/ ? 'Ib' : 'ib'
+      `file -#{flags} #{realpath}`.chomp.gsub(/;.*/,'')
+    end
   end
 end
 
@@ -75,7 +79,7 @@ def build_multipart_content(params)
       data << "Content-Length: #{value.size}"
       data << "Content-Transfer-Encoding: binary"
       data << ""
-      data << value.read
+      data << value.binread
     else
       data << "Content-Disposition: form-data; name=\"#{urlencode(name.to_s)}\""
       data << ""
@@ -123,6 +127,11 @@ OptionParser.new do |opts|
   opts.on("--skip-ssl-verification",
       "Skip SSL Verification in the HTTP Request.") do
     $options[:skip_ssl_verification] = true
+  end
+  
+  opts.on("-m", "--mime-type [TYPE]",
+      "Manually specify mime-type instead autodetection.") do |arg_type|
+    $options[:mime_type] = arg_type
   end
   
   opts.on("-h", "--help", 
