@@ -150,7 +150,7 @@ end.parse!
 # The file we want to upload, and repo where to upload it to.
 die("Please specify a file to upload.") if ARGV.length < 1
 file = Pathname.new(ARGV[0])
-repo = ARGV[1] || `git config --get remote.origin.url`.match(/git@github.com:(.+?)\.git/)[1]
+repo = ARGV[1] || `git config --get remote.origin.url`.match(/github.com[:\/](.+?)\.git/)[1]
 
 file_name =        $options[:file_name] || file.basename.to_s
 file_description = $options[:file_description] || ""
