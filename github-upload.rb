@@ -191,6 +191,9 @@ res = post("https://api.github.com/repos/#{repo}/downloads", $options[:token], {
 die("File already exists named '#{file_name}'.") if res.class == Net::HTTPClientError
 die("GitHub doesn't want us to upload the file.") unless res.class == Net::HTTPCreated
 
+# The URL where people can download the file. At the end of the script, we
+# print it out for convenience.
+html_url = JSON.parse(res.body)['html_url']
 
 # Parse the body and use the info to upload the file to S3.
 info = JSON.parse(res.body)
@@ -205,4 +208,4 @@ die("S3 is mean to us.") unless res.class == Net::HTTPCreated
 
 
 # Print the URL to the file to stdout.
-puts "#{info['s3_url']}#{info['path']}"
+puts html_url
