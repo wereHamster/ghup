@@ -2,7 +2,8 @@ This is a script which can upload files to github from the commandline.
 
 ### Installation
 
-First you need to get a oauth token:
+First you need to get a oauth token. The token must include either the `repo`
+or `public_repo` scope.
 
     curl -X POST -u <github user>:<github password> \
       -d '{"note":"file upload script","scopes":["repo"]}' \
