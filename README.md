@@ -1,3 +1,5 @@
+# ** Note: GitHub has decided to [discontinue the downloads](https://github.com/blog/1302-goodbye-uploads) **
+
 This is a script which can upload files to github from the commandline.
 
 ### Installation
